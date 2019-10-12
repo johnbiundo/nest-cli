@@ -1,3 +1,8 @@
+import chalk from 'chalk';
+
+import { MESSAGES } from '../lib/ui';
+
+import { Answers } from 'inquirer';
 import { Input } from '../commands';
 import {
   AbstractPackageManager,
@@ -10,8 +15,76 @@ import {
 } from '../lib/schematics';
 import { AbstractAction } from './abstract.action';
 
+import { getValueOrDefault } from '../lib/compiler/helpers/get-value-or-default';
+
+import {
+  askForProjectName,
+  moveDefaultProjectToStart,
+  shouldAskForProject,
+} from '../lib/utils/project-utils';
+
+import { loadConfiguration } from '../lib/utils/load-configuration';
+
+const schematicName = 'nest-add';
+
 export class AddAction extends AbstractAction {
-  public async handle(inputs: Input[], outputs: any[], extraFlags: string[]) {
+  public async handle(inputs: Input[], options: Input[], extraFlags: string[]) {
+    const sourceRootOption = await this.getSourceRoot(inputs.concat(options));
+    options.push(sourceRootOption);
+    await this.addLibrary(inputs, options, extraFlags);
+  }
+
+  private async getSourceRoot(inputs: Input[]) {
+    const configuration = await loadConfiguration();
+    const configurationProjects = configuration.projects;
+
+    const appName = inputs.find(option => option.name === 'project')!
+      .value as string;
+
+    let sourceRoot = appName
+      ? getValueOrDefault(configuration, 'sourceRoot', appName)
+      : configuration.sourceRoot;
+
+    if (
+      await shouldAskForProject(schematicName, configurationProjects, appName)
+    ) {
+      const defaultLabel: string = ' [ Default ]';
+      let defaultProjectName: string = configuration.sourceRoot + defaultLabel;
+
+      for (const property in configurationProjects) {
+        if (
+          configurationProjects[property].sourceRoot ===
+          configuration.sourceRoot
+        ) {
+          defaultProjectName = property + defaultLabel;
+          break;
+        }
+      }
+
+      const projects = moveDefaultProjectToStart(
+        configuration,
+        defaultProjectName,
+        defaultLabel,
+      );
+
+      const answers: Answers = await askForProjectName(
+        MESSAGES.LIBRARY_PROJECT_SELECTION_QUESTION,
+        projects,
+      );
+      const project: string = answers.appName.replace(defaultLabel, '');
+      if (project !== configuration.sourceRoot) {
+        sourceRoot = configurationProjects[project].sourceRoot;
+      }
+    }
+
+    return { name: 'sourceRoot', value: sourceRoot };
+  }
+
+  private async addLibrary(
+    inputs: Input[],
+    options: Input[],
+    extraFlags: string[],
+  ) {
     const manager: AbstractPackageManager = await PackageManagerFactory.find();
     const libraryInput: Input = inputs.find(
       input => input.name === 'library',
@@ -37,22 +110,45 @@ export class AddAction extends AbstractAction {
       : packageName.split('@', 2)[1];
 
     tagName = tagName || 'latest';
-    await manager.addProduction([collectionName], tagName);
 
-    const schematicName = 'nest-add';
+    const packageInstalled = await manager.addProduction(
+      [collectionName],
+      tagName,
+    );
+
+    if (!packageInstalled) {
+      console.error(
+        chalk.red(MESSAGES.LIBRARY_INSTALLATION_FAILED_BAD_PACKAGE(library)),
+      );
+      return Promise.reject();
+    }
+
+    console.info(MESSAGES.LIBRARY_INSTALLATION_STARTS);
+
     try {
       const collection: AbstractCollection = CollectionFactory.create(
         collectionName,
       );
       const schematicOptions: SchematicOption[] = [];
+
+      schematicOptions.push(
+        new SchematicOption('sourceRoot', options.find(
+          option => option.name === 'sourceRoot',
+        )!.value as string),
+      );
+
       const extraFlagsString = extraFlags ? extraFlags.join(' ') : undefined;
-      await collection.execute(
+
+      return await collection.execute(
         schematicName,
         schematicOptions,
         extraFlagsString,
       );
-    } catch (e) {
-      return;
+    } catch (error) {
+      if (error && error.message) {
+        console.error(chalk.red(error.message));
+        return Promise.reject();
+      }
     }
   }
 }
