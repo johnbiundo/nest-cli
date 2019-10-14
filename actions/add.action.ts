@@ -46,9 +46,12 @@ export class AddAction extends AbstractAction {
       ? getValueOrDefault(configuration, 'sourceRoot', appName)
       : configuration.sourceRoot;
 
-    if (
-      await shouldAskForProject(schematicName, configurationProjects, appName)
-    ) {
+    const shouldAsk = await shouldAskForProject(
+      schematicName,
+      configurationProjects,
+      appName,
+    );
+    if (shouldAsk) {
       const defaultLabel: string = ' [ Default ]';
       let defaultProjectName: string = configuration.sourceRoot + defaultLabel;
 
