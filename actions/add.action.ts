@@ -32,6 +32,7 @@ export class AddAction extends AbstractAction {
     const sourceRootOption = await this.getSourceRoot(inputs.concat(options));
     options.push(sourceRootOption);
     await this.addLibrary(inputs, options, extraFlags);
+    process.exit(0);
   }
 
   private async getSourceRoot(inputs: Input[]) {
@@ -139,7 +140,7 @@ export class AddAction extends AbstractAction {
 
       const extraFlagsString = extraFlags ? extraFlags.join(' ') : undefined;
 
-      return await collection.execute(
+      await collection.execute(
         schematicName,
         schematicOptions,
         extraFlagsString,
