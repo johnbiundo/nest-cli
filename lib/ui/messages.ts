@@ -25,5 +25,5 @@ export const MESSAGES = {
   NEST_INFORMATION_PACKAGE_MANAGER_FAILED: `${EMOJIS.SMIRK}  cannot read your project package.json file, are you inside your project directory?`,
   LIBRARY_INSTALLATION_FAILED_BAD_PACKAGE: (name: string) =>
     `Unable to install library ${name} because package did not install. Please check package name.`,
-  LIBRARY_INSTALLATION_STARTS: 'Starting libray setup...',
+  LIBRARY_INSTALLATION_STARTS: 'Starting library setup...',
 };

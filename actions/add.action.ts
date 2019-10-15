@@ -29,6 +29,12 @@ const schematicName = 'nest-add';
 
 export class AddAction extends AbstractAction {
   public async handle(inputs: Input[], options: Input[], extraFlags: string[]) {
+    const packageInstallResult = await this.installPackage(
+      inputs,
+      options,
+      extraFlags,
+    );
+    console.log('pacakge install results:', packageInstallResult);
     const sourceRootOption = await this.getSourceRoot(inputs.concat(options));
     options.push(sourceRootOption);
     await this.addLibrary(inputs, options, extraFlags);
@@ -84,7 +90,7 @@ export class AddAction extends AbstractAction {
     return { name: 'sourceRoot', value: sourceRoot };
   }
 
-  private async addLibrary(
+  private async installPackage(
     inputs: Input[],
     options: Input[],
     extraFlags: string[],
@@ -95,8 +101,9 @@ export class AddAction extends AbstractAction {
     ) as Input;
 
     if (!libraryInput) {
-      return;
+      Promise.reject('No library');
     }
+
     const library: string = libraryInput.value as string;
     const packageName = library.startsWith('@')
       ? library.split('/', 2).join('/')
@@ -115,19 +122,34 @@ export class AddAction extends AbstractAction {
 
     tagName = tagName || 'latest';
 
-    const packageInstalled = await manager.addProduction(
-      [collectionName],
-      tagName,
-    );
+    return await manager.addProduction([collectionName], tagName);
+  }
 
-    if (!packageInstalled) {
-      console.error(
-        chalk.red(MESSAGES.LIBRARY_INSTALLATION_FAILED_BAD_PACKAGE(library)),
-      );
-      return Promise.reject();
+  private async addLibrary(
+    inputs: Input[],
+    options: Input[],
+    extraFlags: string[],
+  ) {
+    console.info(MESSAGES.LIBRARY_INSTALLATION_STARTS);
+    const libraryInput: Input = inputs.find(
+      input => input.name === 'library',
+    ) as Input;
+
+    if (!libraryInput) {
+      Promise.reject('No library');
     }
 
-    console.info(MESSAGES.LIBRARY_INSTALLATION_STARTS);
+    const library: string = libraryInput.value as string;
+    const packageName = library.startsWith('@')
+      ? library.split('/', 2).join('/')
+      : library.split('/', 1)[0];
+
+    // Remove the tag/version from the package name.
+    const collectionName =
+      (packageName.startsWith('@')
+        ? packageName.split('@', 2).join('@')
+        : packageName.split('@', 1).join('@')) +
+      library.slice(packageName.length);
 
     try {
       const collection: AbstractCollection = CollectionFactory.create(
